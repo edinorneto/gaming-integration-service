@@ -104,11 +104,11 @@ Returns all games currently stored in memory.
 
 #### Get a game by ID
 
-    GET /games/{id}
+    GET /game/{id}
 
 Example:
 
-    GET /games/2
+    GET /game/2
 
 Possible responses:
 
