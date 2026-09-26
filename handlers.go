@@ -126,7 +126,7 @@ func getSessionsHandler(w http.ResponseWriter, r *http.Request) {
 // ============================================================
 
 // gameHandler procura um jogo pelo ID informado na URL.
-func getGameIDHandler(w http.ResponseWriter, r *http.Request) {
+func getGamesIDHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 

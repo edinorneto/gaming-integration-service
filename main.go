@@ -8,10 +8,10 @@ func main() {
 	http.HandleFunc("GET /games", getGamesHandler)
 
 	// GET /games/{id}
-	http.HandleFunc("GET /game/{id}", getGameIDHandler)
+	http.HandleFunc("GET /games/{id}", getGamesIDHandler)
 
 	// GET /providers
-	http.HandleFunc("GET /providers", getProviderHandler)
+	http.HandleFunc("GET /providers", getProvidersHandler)
 
 	// GET /sessions
 	http.HandleFunc("GET /sessions", getSessionsHandler)
@@ -20,7 +20,7 @@ func main() {
 	http.HandleFunc("POST /games", createGameHandler)
 
 	// POST /sessions
-	http.HandleFunc("POST /sessions", createSessionsHandler)
+	http.HandleFunc("POST /sessions", createSessionHandler)
 
 	// Inicia o servidor HTTP na porta 8080.
 	http.ListenAndServe(":8080", nil)
