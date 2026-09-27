@@ -1,0 +1,41 @@
+services:
+
+  app:
+    build: .
+    container_name: gaming-api
+
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/gaming
+
+    ports:
+      - "8080:8080"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:18
+    container_name: gaming-postgres
+
+    environment:
+      POSTGRES_DB: gaming
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gaming"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

@@ -4,24 +4,24 @@ import "net/http"
 
 func main() {
 
-	// GET /games
+	var err error
+
+	db, err = connectDatabase()
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
 	http.HandleFunc("GET /games", getGamesHandler)
-
-	// GET /games/{id}
 	http.HandleFunc("GET /games/{id}", getGamesIDHandler)
-
-	// GET /providers
 	http.HandleFunc("GET /providers", getProvidersHandler)
-
-	// GET /sessions
 	http.HandleFunc("GET /sessions", getSessionsHandler)
-
-	// POST /games
 	http.HandleFunc("POST /games", createGameHandler)
+	http.HandleFunc("POST /sessions", createSessionsHandler)
 
-	// POST /sessions
-	http.HandleFunc("POST /sessions", createSessionHandler)
-
-	// Inicia o servidor HTTP na porta 8080.
-	http.ListenAndServe(":8080", nil)
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		panic(err)
+	}
 }

@@ -2,84 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
-	"projeto-go/domain"
+	"github.com/edinorneto/gaming-integration-service/domain"
+
+	"github.com/jackc/pgx/v5"
 )
-
-// ============================================================
-// DADOS EM MEMÓRIA
-// ============================================================
-
-// Providers disponíveis no sistema.
-// Dados apenas para demonstração e desenvolvimento local.
-// Não representam integrações oficiais com essas empresas.
-var providers = []domain.Provider{
-	{
-		ID:     1,
-		Nome:   "Jungle Originals",
-		Active: true,
-	},
-	{
-		ID:     2,
-		Nome:   "Aurora Gaming",
-		Active: true,
-	},
-	{
-		ID:     3,
-		Nome:   "Emerald Interactive",
-		Active: true,
-	},
-	{
-		ID:     4,
-		Nome:   "NovaPlay",
-		Active: true,
-	},
-	{
-		ID:     5,
-		Nome:   "Orbit Gaming",
-		Active: true,
-	},
-}
-
-// Catálogo inicial de jogos.
-// ProviderID relaciona cada jogo ao provider correspondente.
-
-var games = []domain.Game{
-	// Jungle Originals
-	{ID: 1, Nome: "Captain's Treasure", ProviderID: 1},
-	{ID: 2, Nome: "Fox the Course Seller", ProviderID: 1},
-	{ID: 3, Nome: "Chimp Mines", ProviderID: 1},
-	{ID: 4, Nome: "Goblin's Gold", ProviderID: 1},
-
-	// Aurora Gaming
-	{ID: 5, Nome: "Emerald Rush", ProviderID: 2},
-	{ID: 6, Nome: "Golden Jungle", ProviderID: 2},
-	{ID: 7, Nome: "Mystic Fortune", ProviderID: 2},
-	{ID: 8, Nome: "Treasure Spins", ProviderID: 2},
-
-	// Emerald Interactive
-	{ID: 9, Nome: "Neon Reels", ProviderID: 3},
-	{ID: 10, Nome: "Diamond Vault", ProviderID: 3},
-	{ID: 11, Nome: "Wild Horizon", ProviderID: 3},
-	{ID: 12, Nome: "Lucky Temple", ProviderID: 3},
-
-	// NovaPlay
-	{ID: 13, Nome: "Golden Quest", ProviderID: 4},
-	{ID: 14, Nome: "Treasure Temple", ProviderID: 4},
-	{ID: 15, Nome: "Moonlit Fortune", ProviderID: 4},
-	{ID: 16, Nome: "Wild Expedition", ProviderID: 4},
-
-	// Orbit Gaming
-	{ID: 17, Nome: "Cyber Fortune", ProviderID: 5},
-	{ID: 18, Nome: "Jungle Nights", ProviderID: 5},
-	{ID: 19, Nome: "Crystal Reels", ProviderID: 5},
-	{ID: 20, Nome: "Lucky Orbit", ProviderID: 5},
-}
-
-// Sessões criadas durante a execução da aplicação.
-var sessions []domain.GameSession
 
 // ============================================================
 // GET /games
@@ -89,6 +19,13 @@ var sessions []domain.GameSession
 func getGamesHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
+
+	games, err := getGamesFromDatabase()
+
+	if err != nil {
+		writeJSONError(w, "Erro ao buscar games.", http.StatusInternalServerError)
+		return
+	}
 
 	json.NewEncoder(w).Encode(games)
 }
@@ -103,8 +40,18 @@ func getProvidersHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	json.NewEncoder(w).Encode(providers)
+	providers, err := getProvidersFromDatabase()
 
+	if err != nil {
+		writeJSONError(
+			w,
+			"Erro ao buscar providers.",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	json.NewEncoder(w).Encode(providers)
 }
 
 // ============================================================
@@ -117,43 +64,62 @@ func getSessionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	json.NewEncoder(w).Encode(sessions)
+	sessions, err := getSessionsFromDatabase()
 
+	if err != nil {
+		writeJSONError(
+			w,
+			"Erro ao buscar sessões.",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	json.NewEncoder(w).Encode(sessions)
 }
 
 // ============================================================
 // GET /games/{id}
 // ============================================================
 
-// gameHandler procura um jogo pelo ID informado na URL.
+// getGamesIDHandler procura um jogo pelo ID.
 func getGamesIDHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	// Pega o valor do {id} na URL.
-	id := r.PathValue("id")
-
-	// Converte o ID de string para int.
-	gameID, err := strconv.Atoi(id)
+	id, err := strconv.Atoi(r.PathValue("id"))
 
 	if err != nil {
-		writeJSONError(w, "ID inválido.", http.StatusBadRequest)
+		writeJSONError(
+			w,
+			"ID inválido.",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
-	// Procura o jogo no catálogo.
-	for _, game := range games {
+	game, err := getGameByIDFromDatabase(id)
 
-		if game.ID == gameID {
+	if err != nil {
 
-			json.NewEncoder(w).Encode(game)
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeJSONError(
+				w,
+				"Game não encontrado.",
+				http.StatusNotFound,
+			)
 			return
 		}
+
+		writeJSONError(
+			w,
+			"Erro ao buscar game.",
+			http.StatusInternalServerError,
+		)
+		return
 	}
 
-	// Se percorreu todos os jogos e não encontrou o ID.
-	writeJSONError(w, "Jogo não encontrado.", http.StatusNotFound)
-
+	json.NewEncoder(w).Encode(game)
 }
 
 // ============================================================
@@ -161,7 +127,7 @@ func getGamesIDHandler(w http.ResponseWriter, r *http.Request) {
 // ============================================================
 
 // createGameHandler recebe um novo jogo em JSON
-// e adiciona o jogo ao catálogo em memória.
+// e persiste o jogo no PostgreSQL.
 
 func createGameHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -169,38 +135,51 @@ func createGameHandler(w http.ResponseWriter, r *http.Request) {
 
 	var game domain.Game
 
-	// Lê o JSON enviado pelo cliente e preenche a struct Game.
 	err := json.NewDecoder(r.Body).Decode(&game)
 
 	if err != nil {
-		writeJSONError(w, "JSON inválido.", http.StatusBadRequest)
+		writeJSONError(
+			w,
+			"JSON inválido.",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
-	providerExists := false
+	exists, err := providerExistsInDatabase(game.ProviderID)
 
-	for _, p := range providers {
-		if p.ID == game.ProviderID {
-			providerExists = true
-			break
-		}
-	}
-
-	if !providerExists {
-		writeJSONError(w, "Provider não encontrado.", http.StatusNotFound)
+	if err != nil {
+		writeJSONError(
+			w,
+			"Erro ao verificar provider.",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
-	// Gera um ID simples para o exemplo em memória.
-	game.ID = len(games) + 1
+	if !exists {
+		writeJSONError(
+			w,
+			"Provider não encontrado.",
+			http.StatusBadRequest,
+		)
+		return
+	}
 
-	// Adiciona o novo jogo ao catálogo.
-	games = append(games, game)
+	createdGame, err := createGameInDatabase(game)
+
+	if err != nil {
+		writeJSONError(
+			w,
+			"Erro ao criar game.",
+			http.StatusInternalServerError,
+		)
+		return
+	}
 
 	w.WriteHeader(http.StatusCreated)
 
-	// Retorna o jogo criado.
-	json.NewEncoder(w).Encode(game)
+	json.NewEncoder(w).Encode(createdGame)
 }
 
 // ============================================================
@@ -210,7 +189,7 @@ func createGameHandler(w http.ResponseWriter, r *http.Request) {
 // createSessionsHandler recebe uma requisição de sessão
 // e inicia uma sessão caso o game exista.
 
-func createSessionHandler(w http.ResponseWriter, r *http.Request) {
+func createSessionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -219,25 +198,48 @@ func createSessionHandler(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&session)
 
 	if err != nil {
-		writeJSONError(w, "JSON inválido.", http.StatusBadRequest)
+		writeJSONError(
+			w,
+			"JSON inválido.",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
-	for _, game := range games {
+	exists, err := gameExistsInDatabase(session.GameID)
 
-		if game.ID == session.GameID {
-
-			session.ID = len(sessions) + 1
-			session.Status = "active"
-
-			sessions = append(sessions, session)
-
-			w.WriteHeader(http.StatusCreated)
-
-			json.NewEncoder(w).Encode(session)
-			return
-		}
+	if err != nil {
+		writeJSONError(
+			w,
+			"Erro ao verificar game.",
+			http.StatusInternalServerError,
+		)
+		return
 	}
 
-	writeJSONError(w, "Jogo não encontrado.", http.StatusNotFound)
+	if !exists {
+		writeJSONError(
+			w,
+			"Game não encontrado.",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	session.Status = "active"
+
+	createdSession, err := createSessionInDatabase(session)
+
+	if err != nil {
+		writeJSONError(
+			w,
+			"Erro ao criar sessão.",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+
+	json.NewEncoder(w).Encode(createdSession)
 }

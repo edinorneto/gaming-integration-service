@@ -1,50 +1,97 @@
 # Gaming Integration Service
 
-A backend service built with Go to simulate a small gaming aggregation and session management service.
+A small backend service built with Go that models a gaming provider, game, and player session domain.
 
-The project models a domain involving game providers, games, and player
-game sessions, exposing these capabilities through a REST API.
+The service exposes a REST API for managing games, providers, and game sessions, using PostgreSQL for persistence and Docker for local development.
 
-> This is an independent portfolio project inspired by the gaming industry
-> domain. It is not an official integration with Jungle Gaming or any
-> third-party provider.
+> This is an independent portfolio project inspired by the gaming industry domain. It is not an official integration with Jungle Gaming or any third-party provider, and it does not reproduce any proprietary architecture.
 
 ## Overview
 
-The service currently provides a REST API for:
+The project was built as a learning-focused backend application to practice concepts commonly used in Go backend development:
+
+- REST API development
+- HTTP handlers with `net/http`
+- JSON encoding and decoding
+- PostgreSQL integration
+- Connection pooling with `pgxpool`
+- Relational data modeling
+- Primary and foreign keys
+- Environment-based configuration
+- Automated HTTP tests with `httptest`
+- Docker and Docker Compose
+
+The current API provides:
 
 - listing games
 - retrieving a game by ID
 - creating games
-- listing game providers
-- creating game sessions
+- listing providers
 - listing game sessions
+- creating game sessions
 
-The current version uses in-memory storage. Data is lost when the
-application is restarted.
-
-PostgreSQL persistence and Docker-based development are planned for the
-next development stages.
+PostgreSQL is the source of truth for the application data.
 
 ## Tech Stack
-
-### Current
 
 - Go
 - `net/http`
 - JSON
-- In-memory storage
-
-### Planned
-
 - PostgreSQL
+- `github.com/jackc/pgx/v5` (`pgxpool`)
 - Docker
 - Docker Compose
-- Automated tests
+- `testing`
+- `httptest`
+
+## Architecture
+
+The current application follows a simple structure:
+
+```text
+HTTP Client
+     |
+     v
+Go HTTP Server
+     |
+     v
+Handlers
+     |
+     v
+Database Functions
+     |
+     v
+pgxpool.Pool
+     |
+     v
+PostgreSQL
+```
+
+For local development, Docker Compose runs the API and PostgreSQL as separate services:
+
+```text
+Docker Compose
+
++-----------------------+
+|      gaming-api       |
+|                       |
+|      Go + net/http    |
++-----------+-----------+
+            |
+            | DATABASE_URL
+            v
++-----------------------+
+|    gaming-postgres    |
+|                       |
+|     PostgreSQL        |
++-----------------------+
+```
+
+The API connects to PostgreSQL through a shared connection pool instead of opening a new database connection for every request.
 
 ## Domain
 
-The current domain contains three main entities.
+The domain contains three main entities.
 
 ### Provider
 
@@ -52,9 +99,11 @@ Represents a game provider available in the system.
 
 Fields:
 
-    ID
-    Nome
-    Active
+```text
+ID
+Nome
+Active
+```
 
 ### Game
 
@@ -62,9 +111,13 @@ Represents a game associated with a provider.
 
 Fields:
 
-    ID
-    Nome
-    ProviderID
+```text
+ID
+Nome
+ProviderID
+```
+
+`ProviderID` is a foreign key referencing `providers.id`.
 
 ### Game Session
 
@@ -72,25 +125,94 @@ Represents a game session started by a player.
 
 Fields:
 
-    ID
-    PlayerID
-    GameID
-    Status
+```text
+ID
+PlayerID
+GameID
+Status
+```
 
-A game session can only be created when the referenced game exists.
+`GameID` is a foreign key referencing `games.id`.
 
 New sessions are created with the initial status:
 
-    active
+```text
+active
+```
+
+## Database
+
+The PostgreSQL schema contains three tables:
+
+```text
+providers
+    |
+    | 1:N
+    v
+games
+    |
+    | 1:N
+    v
+game_sessions
+```
+
+### Providers
+
+```text
+id
+nome
+active
+```
+
+### Games
+
+```text
+id
+nome
+provider_id
+```
+
+### Game Sessions
+
+```text
+id
+player_id
+game_id
+status
+```
+
+### Relationships
+
+```text
+games.provider_id
+        |
+        v
+providers.id
+```
+
+and:
+
+```text
+game_sessions.game_id
+        |
+        v
+games.id
+```
+
+Foreign key constraints are enforced by PostgreSQL to preserve referential integrity.
 
 ## Sample Data
 
-The application starts with a small in-memory dataset containing providers
-and games.
+The project includes initial sample data for local development.
 
-The current sample data is intended for local development and testing.
-It does not represent official integrations with the companies or games
-used as sample data.
+The `seed.sql` file creates:
+
+- 5 providers
+- 20 games
+
+Some sample providers and games are fictional and exist only for demonstration.
+
+The project is independent and does not represent official integrations with the companies or game titles used as sample data.
 
 ## API
 
@@ -98,17 +220,40 @@ used as sample data.
 
 #### List all games
 
-    GET /games
+```http
+GET /games
+```
 
-Returns all games currently stored in memory.
-
-#### Get a game by ID
-
-    GET /games/{id}
+Returns all games stored in PostgreSQL.
 
 Example:
 
-    GET /games/2
+```json
+[
+  {
+    "id": 1,
+    "nome": "Captain's Treasure",
+    "provider_id": 1
+  },
+  {
+    "id": 2,
+    "nome": "Fox the Course Seller",
+    "provider_id": 1
+  }
+]
+```
+
+#### Get a game by ID
+
+```http
+GET /games/{id}
+```
+
+Example:
+
+```http
+GET /games/7
+```
 
 Possible responses:
 
@@ -116,91 +261,143 @@ Possible responses:
 - `400 Bad Request` when the ID is invalid
 - `404 Not Found` when the game does not exist
 
+Example response:
+
+```json
+{
+  "id": 7,
+  "nome": "Mystic Fortune",
+  "provider_id": 2
+}
+```
+
 #### Create a game
 
-    POST /games
+```http
+POST /games
+```
 
 Content-Type:
 
-    application/json
+```text
+application/json
+```
 
 Example request:
 
-    {
-      "nome": "Dark Souls III",
-      "provider_id": 1
-    }
+```json
+{
+  "nome": "New Adventure",
+  "provider_id": 2
+}
+```
 
-The provider referenced by `provider_id` must exist.
+The referenced provider must exist.
 
-Successful creation returns:
-
-    201 Created
+The game ID is generated by PostgreSQL.
 
 Example response:
 
-    {
-      "id": 4,
-      "nome": "Dark Souls III",
-      "provider_id": 1
-    }
+```json
+{
+  "id": 21,
+  "nome": "New Adventure",
+  "provider_id": 2
+}
+```
 
 Possible responses:
 
 - `201 Created` when the game is successfully created
 - `400 Bad Request` when the JSON is invalid
-- `404 Not Found` when the provider does not exist
+- `400 Bad Request` when the referenced provider does not exist
+- `500 Internal Server Error` when an unexpected database error occurs
 
 ### Providers
 
 #### List all providers
 
-    GET /providers
+```http
+GET /providers
+```
 
-Returns all providers currently stored in memory.
+Returns all providers stored in PostgreSQL.
+
+Example response:
+
+```json
+[
+  {
+    "id": 1,
+    "nome": "Jungle Originals",
+    "active": true
+  },
+  {
+    "id": 2,
+    "nome": "Aurora Gaming",
+    "active": true
+  }
+]
+```
 
 ### Game Sessions
 
 #### List all sessions
 
-    GET /sessions
+```http
+GET /sessions
+```
 
-Returns all game sessions created during the current application execution.
+Returns all game sessions stored in PostgreSQL.
 
 #### Create a game session
 
-    POST /sessions
+```http
+POST /sessions
+```
 
 Content-Type:
 
-    application/json
+```text
+application/json
+```
 
 Example request:
 
-    {
-      "player_id": 234,
-      "game_id": 2
-    }
+```json
+{
+  "player_id": 123,
+  "game_id": 7
+}
+```
 
-The referenced game must exist in the current game catalog.
+The referenced game must exist.
 
-The server generates the session ID and sets its initial status to
-`active`.
+New sessions are created with:
+
+```text
+status = active
+```
+
+The session ID is generated by PostgreSQL.
 
 Example response:
 
-    {
-      "id": 1,
-      "player_id": 234,
-      "game_id": 2,
-      "status": "active"
-    }
+```json
+{
+  "id": 1,
+  "player_id": 123,
+  "game_id": 7,
+  "status": "active"
+}
+```
 
 Possible responses:
 
 - `201 Created` when the session is successfully created
 - `400 Bad Request` when the JSON is invalid
-- `404 Not Found` when the referenced game does not exist
+- `400 Bad Request` when the referenced game does not exist
+- `500 Internal Server Error` when an unexpected database error occurs
 
 ## HTTP Status Codes
 
@@ -210,39 +407,253 @@ The API currently uses the following status codes:
 |---|---|
 | `200 OK` | Request completed successfully |
 | `201 Created` | Resource was successfully created |
-| `400 Bad Request` | Invalid JSON or request parameter |
-| `404 Not Found` | Requested resource or related entity does not exist |
+| `400 Bad Request` | Invalid JSON, invalid parameter, or missing related entity |
+| `404 Not Found` | Requested game does not exist |
+| `500 Internal Server Error` | Unexpected server or database error |
 
 Errors are returned using a standardized JSON structure:
 
-    {
-      "error": "Jogo não encontrado."
-    }
+```json
+{
+  "error": "Game não encontrado."
+}
+```
+
+## Configuration
+
+The database connection string is provided through the `DATABASE_URL` environment variable.
+
+The application reads this variable using:
+
+```go
+os.Getenv("DATABASE_URL")
+```
+
+This keeps database configuration outside the application code and allows the same codebase to run in different environments.
+
+Example:
+
+```text
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/gaming
+```
+
+When running inside Docker Compose, the PostgreSQL service is available through the service name:
+
+```text
+postgres
+```
+
+so the application uses a database URL similar to:
+
+```text
+postgres://postgres:postgres@postgres:5432/gaming
+```
+
+## Running with Docker
+
+Docker Compose is the recommended way to run the complete application locally.
+
+### Prerequisites
+
+- Go 1.27.1+
+- Docker Desktop
+- PowerShell for the example commands
+
+### Start the application
+
+From the project directory:
+
+```powershell
+docker compose up --build
+```
+
+This starts:
+
+```text
+gaming-api
+gaming-postgres
+```
+
+The PostgreSQL service initializes the database using:
+
+```text
+schema.sql
+seed.sql
+```
+
+The API is available at:
+
+```text
+http://localhost:8080
+```
+
+The Docker Compose configuration uses development-only PostgreSQL credentials for local use.
+
+### Test the API
+
+Example:
+
+```powershell
+Invoke-RestMethod -Method GET -Uri "http://localhost:8080/games"
+```
+
+Example:
+
+```powershell
+Invoke-RestMethod -Method GET -Uri "http://localhost:8080/providers"
+```
+
+Example:
+
+```powershell
+Invoke-RestMethod -Method GET -Uri "http://localhost:8080/sessions"
+```
+
+### Create a game
+
+```powershell
+Invoke-RestMethod `
+  -Method POST `
+  -Uri "http://localhost:8080/games" `
+  -ContentType "application/json" `
+  -Body '{"nome":"New Adventure","provider_id":2}'
+```
+
+### Stop the application
+
+```powershell
+docker compose down
+```
+
+### Reset the PostgreSQL database
+
+To remove the database volume and recreate the database from `schema.sql` and `seed.sql`:
+
+```powershell
+docker compose down -v
+docker compose up --build
+```
+
+The `-v` option removes the PostgreSQL volume, causing the database to be initialized again from scratch.
+
+## Running Locally Without Docker
+
+The application can also be executed directly with Go if PostgreSQL is already available.
+
+Set the database connection string:
+
+```powershell
+$env:DATABASE_URL="postgres://postgres:postgres@localhost:5432/gaming"
+```
+
+Run the application:
+
+```powershell
+go run .
+```
+
+The application should report:
+
+```text
+Database connection successful
+```
+
+Then the API will be available at:
+
+```text
+http://localhost:8080
+```
+
+## Testing
+
+The project includes automated HTTP tests using Go's standard `testing` package and `httptest`.
+
+Run all tests with:
+
+```powershell
+go test ./...
+```
+
+The current tests cover scenarios including:
+
+- successful game retrieval
+- game not found
+- invalid game ID
+- provider listing
+- successful game creation
+- game creation with a non-existent provider
+- successful session creation
+- session creation with a non-existent game
+
+The tests use a real PostgreSQL database to verify the database-backed behavior of the handlers.
 
 ## Project Structure
 
-    gaming-integration-service/
-    ├── domain/
-    │   └── models.go
-    ├── errors.go
-    ├── handlers.go
-    ├── main.go
-    ├── go.mod
-    └── README.md
+```text
+gaming-integration-service/
+│
+├── domain/
+│   └── models.go
+│
+├── database.go
+├── errors.go
+├── handlers.go
+├── handlers_test.go
+├── main.go
+│
+├── schema.sql
+├── seed.sql
+│
+├── Dockerfile
+├── docker-compose.yml
+├── .dockerignore
+├── .gitignore
+├── .env.example
+│
+├── go.mod
+├── go.sum
+└── README.md
+```
 
 ### Responsibilities
 
 #### `domain/`
 
-Contains the core domain entities and their basic behavior:
+Contains the core domain entities:
 
 - `Game`
 - `Provider`
 - `GameSession`
 
+and their basic domain behavior.
+
+#### `database.go`
+
+Contains PostgreSQL access functions.
+
+Responsibilities include:
+
+- creating the PostgreSQL connection pool
+- checking database connectivity
+- querying games
+- querying providers
+- querying sessions
+- checking related entities
+- inserting games
+- inserting sessions
+
 #### `handlers.go`
 
-Contains the HTTP handlers and the current in-memory application data.
+Contains the HTTP handlers.
+
+Responsibilities include:
+
+- receiving HTTP requests
+- decoding JSON
+- validating request data
+- calling database functions
+- handling HTTP status codes
+- returning JSON responses
 
 #### `errors.go`
 
@@ -250,134 +661,77 @@ Contains the helper used to return standardized JSON error responses.
 
 #### `main.go`
 
-Registers the API routes and starts the HTTP server.
+Responsible for:
 
-## Current API Routes
+- initializing the database pool
+- registering API routes
+- starting the HTTP server
 
-    GET  /games
-    GET  /games/{id}
-    POST /games
+#### `schema.sql`
 
-    GET  /providers
+Defines the PostgreSQL database structure.
 
-    GET  /sessions
-    POST /sessions
+#### `seed.sql`
 
-## Running Locally
+Defines the initial sample data used for local development.
 
-Make sure Go is installed, then run:
+#### `Dockerfile`
 
-    go run .
+Defines how the Go application is built and packaged into a Docker image using a multi-stage build.
 
-The API will be available at:
+#### `docker-compose.yml`
 
-    http://localhost:8080
+Defines the local Docker environment containing:
 
-## Example Requests
+- the Go API
+- the PostgreSQL database
+- the network between the services
+- the PostgreSQL persistent volume
+- database initialization scripts
+- the PostgreSQL health check
 
-### Get all games
+## API Routes
 
-    GET http://localhost:8080/games
+```text
+GET  /games
+GET  /games/{id}
+POST /games
 
-### Get a specific game
+GET  /providers
 
-    GET http://localhost:8080/games/2
+GET  /sessions
+POST /sessions
+```
 
-### Get all providers
+## Development Notes
 
-    GET http://localhost:8080/providers
+This project intentionally keeps the architecture small and explicit.
 
-### Get all sessions
+The goal is to demonstrate understanding of:
 
-    GET http://localhost:8080/sessions
+- Go HTTP APIs
+- handlers
+- structs and domain modeling
+- PostgreSQL
+- SQL queries
+- foreign keys
+- connection pooling
+- environment-based configuration
+- Docker
+- automated tests
 
-### Create a game
+The project does not attempt to reproduce a production gaming platform or the proprietary architecture of any real company.
 
-    POST http://localhost:8080/games
+## Future Improvements
 
-Request body:
+Possible future improvements include:
 
-    {
-      "nome": "Dark Souls III",
-      "provider_id": 1
-    }
-
-### Create a game session
-
-    POST http://localhost:8080/sessions
-
-Request body:
-
-    {
-      "player_id": 234,
-      "game_id": 2
-    }
-
-## Current State
-
-The project currently provides:
-
-- REST API built with Go
-- HTTP routing with `net/http`
-- JSON request and response handling
-- In-memory game catalog
-- In-memory provider catalog
-- In-memory game session storage
-- Game lookup by ID
-- Game creation
-- Provider lookup
-- Game session creation
-- Basic request validation
-- Standardized JSON error responses
-- HTTP status code handling
-- Route parameters
-
-## Planned Development
-
-The next stages of the project are:
-
-- PostgreSQL persistence
-- Database schema and migrations
-- Data access layer
-- Docker and Docker Compose
-- Automated tests
-- Further API and domain refinements
-
-## Goals
-
-This project is being developed as a practical backend portfolio project
-focused on learning and demonstrating:
-
-- Go backend development
-- REST API design
-- HTTP and JSON handling
-- Domain modeling
-- Error handling
-- HTTP status codes
-- PostgreSQL persistence
-- Docker-based development
-- Backend architecture
-
-## Roadmap
-
-    Phase 1
-    Go + Domain Modeling
-            ↓
-    Phase 2
-    REST API + In-Memory Storage
-            ↓
-    Phase 3
-    PostgreSQL Persistence
-            ↓
-    Phase 4
-    Docker / Docker Compose
-            ↓
-    Phase 5
-    Automated Tests + Refinements
-
-## Disclaimer
-
-This is an independent educational and portfolio project.
-
-It is not affiliated with, sponsored by, or officially integrated with
-Jungle Gaming, its partners, or any third-party gaming provider.
+- stronger request validation
+- improved error handling
+- more isolated integration tests
+- database migrations
+- structured logging
+- authentication and authorization
+- additional API resources
+- improved application configuration
+- further separation of application responsibilities as the project grows

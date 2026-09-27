@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+.env.*
+*.md
+
+*_test.go
+
+.vscode
+.idea
+
+bin
+tmp
+
+Dockerfile
+docker-compose.yml

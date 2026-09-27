@@ -1,0 +1,20 @@
+# Environment / local configuration
+.env
+.env.*
+!.env.example
+
+# Go build artifacts
+gaming-api
+*.exe
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Temporary files
+tmp/
+bin/
+
+# OS files
+.DS_Store
+Thumbs.db
