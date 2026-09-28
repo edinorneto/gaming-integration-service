@@ -226,7 +226,7 @@ func createSessionsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session.Status = "active"
+	session.Status = "pending"
 
 	createdSession, err := createSessionInDatabase(session)
 
@@ -237,6 +237,10 @@ func createSessionsHandler(w http.ResponseWriter, r *http.Request) {
 			http.StatusInternalServerError,
 		)
 		return
+	}
+
+	sessionQueue <- SessionMessage{
+		SessionID: createdSession.ID,
 	}
 
 	w.WriteHeader(http.StatusCreated)

@@ -212,6 +212,32 @@ func getSessionsFromDatabase() ([]domain.GameSession, error) {
 	return sessions, nil
 }
 
+func getSessionByIDFromDatabase(id int) (domain.GameSession, error) {
+
+	var session domain.GameSession
+
+	err := db.QueryRow(
+		context.Background(),
+		`
+		SELECT id, player_id, game_id, status
+		FROM game_sessions
+		WHERE id = $1
+		`,
+		id,
+	).Scan(
+		&session.ID,
+		&session.PlayerID,
+		&session.GameID,
+		&session.Status,
+	)
+
+	if err != nil {
+		return domain.GameSession{}, err
+	}
+
+	return session, nil
+}
+
 func createGameInDatabase(game domain.Game) (domain.Game, error) {
 
 	var createdGame domain.Game
@@ -264,4 +290,25 @@ func createSessionInDatabase(session domain.GameSession) (domain.GameSession, er
 	}
 
 	return createdSession, nil
+}
+
+func updateSessionStatusInDatabase(id int, status string) (bool, error) {
+
+	result, err := db.Exec(
+		context.Background(),
+		`
+		UPDATE game_sessions
+		SET status = $1
+		WHERE id = $2
+		  AND status = 'pending'
+		`,
+		status,
+		id,
+	)
+
+	if err != nil {
+		return false, err
+	}
+
+	return result.RowsAffected() > 0, nil
 }

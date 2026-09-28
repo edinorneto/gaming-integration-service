@@ -21,7 +21,11 @@ func main() {
 	http.HandleFunc("POST /games", createGameHandler)
 	http.HandleFunc("POST /sessions", createSessionsHandler)
 
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	handler := loggingMiddleware(http.DefaultServeMux)
+
+	go startSessionWorker()
+
+	if err := http.ListenAndServe(":8080", handler); err != nil {
 		panic(err)
-	}
+}
 }
